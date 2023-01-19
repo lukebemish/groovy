@@ -60,6 +60,7 @@ public class StatementWriter {
 
     private static final MethodCaller iteratorHasNextMethod = MethodCaller.newInterface(Iterator.class, "hasNext");
     private static final MethodCaller iteratorNextMethod = MethodCaller.newInterface(Iterator.class, "next");
+    public static final String SHOULD_CLEAR_RETURN = "_SHOULD_CLEAR_RETURN";
 
     protected final WriterController controller;
 
@@ -603,7 +604,9 @@ public class StatementWriter {
 
         int mark = controller.getOperandStack().getStackLength();
         Expression expression = statement.getExpression();
+        expression.putNodeMetaData(SHOULD_CLEAR_RETURN, true);
         expression.visit(controller.getAcg());
+        expression.removeNodeMetaData(SHOULD_CLEAR_RETURN);
         controller.getOperandStack().popDownTo(mark);
     }
 }

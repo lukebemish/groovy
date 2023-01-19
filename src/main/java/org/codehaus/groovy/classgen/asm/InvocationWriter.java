@@ -132,6 +132,10 @@ public class InvocationWriter {
     }
 
     protected boolean writeDirectMethodCall(final MethodNode target, final boolean implicitThis, final Expression receiver, final TupleExpression args) {
+        return writeDirectMethodCallChecked(target, implicitThis, receiver, args, null);
+    }
+
+    protected boolean writeDirectMethodCallChecked(final MethodNode target, final boolean implicitThis, final Expression receiver, final TupleExpression args, final Expression origin) {
         if (target == null) return false;
         ClassNode declaringClass = target.getDeclaringClass();
         ClassNode enclosingClass = controller.getClassNode(), receiverType = enclosingClass;
@@ -212,12 +216,23 @@ public class InvocationWriter {
         String signature = BytecodeHelper.getMethodDescriptor(target.getReturnType(), target.getParameters());
         mv.visitMethodInsn(opcode, ownerName, methodName, signature, ownerClass.isInterface());
         ClassNode returnType = target.getReturnType();
-        if (isPrimitiveVoid(returnType)) {
+
+        boolean asExpression = origin == null || origin.getNodeMetaData(StatementWriter.SHOULD_CLEAR_RETURN) == null;
+
+        if (isPrimitiveVoid(returnType) && asExpression) {
             returnType = ClassHelper.OBJECT_TYPE;
             mv.visitInsn(ACONST_NULL);
+            // replace the method call's receiver and argument types with the return type
+            operandStack.replace(returnType, operandStack.getStackLength() - startDepth);
+        } else if (asExpression) {
+            // replace the method call's receiver and argument types with the return type
+            operandStack.replace(returnType, operandStack.getStackLength() - startDepth);
+        } else {
+            if (!isPrimitiveVoid(returnType)) {
+                mv.visitInsn(POP);
+            }
+            operandStack.remove(operandStack.getStackLength() - startDepth);
         }
-        // replace the method call's receiver and argument types with the return type
-        operandStack.replace(returnType, operandStack.getStackLength() - startDepth);
         return true;
     }
 
@@ -295,7 +310,7 @@ public class InvocationWriter {
                     } else {
                         args = new TupleExpression(receiver);
                     }
-                    if (writeDirectMethodCall(meta.target, true, null, args)) return true;
+                    if (writeDirectMethodCallChecked(meta.target, true, null, args, origin)) return true;
                 }
             }
         }
@@ -303,7 +318,7 @@ public class InvocationWriter {
         if (origin instanceof MethodCallExpression) {
             MethodCallExpression mce = (MethodCallExpression) origin;
             if (mce.getMethodTarget() != null)
-                return writeDirectMethodCall(mce.getMethodTarget(), implicitThis, receiver, makeArgumentList(arguments));
+                return writeDirectMethodCallChecked(mce.getMethodTarget(), implicitThis, receiver, makeArgumentList(arguments), origin);
         }
         return false;
     }
